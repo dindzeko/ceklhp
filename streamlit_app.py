@@ -31,15 +31,21 @@ def recalculate_tables(doc_path):
             for col_idx, cell in enumerate(row.cells):
                 value = cell.text.strip()
                 
-                # Coba ekstrak angka dari sel
+                # Coba ekstrak angka dari sel (termasuk angka negatif dalam tanda kurung)
                 cleaned_value = value.replace('.', '').replace(',', '.')  # Bersihkan format angka
-                if re.match(r'^\d+\.?\d*$', cleaned_value):  # Cek apakah ini angka
+                
+                # Cek apakah angka dalam tanda kurung (misalnya: "(45)")
+                if re.match(r'^\((\d+\.?\d*)\)$', cleaned_value):  # Contoh: "(45)"
+                    num = -float(cleaned_value[1:-1])  # Ubah ke negatif
+                elif re.match(r'^-?\d+\.?\d*$', cleaned_value):  # Contoh: "-45" atau "45"
                     num = float(cleaned_value)
-                    
-                    # Abaikan baris "Jumlah" atau "Total" dalam perhitungan
-                    if not is_total_row:
-                        vertical_sums[col_idx] += num  # Tambahkan ke total kolom
-                        row_sum += num  # Tambahkan ke total baris
+                else:
+                    continue  # Bukan angka, lewati
+                
+                # Abaikan baris "Jumlah" atau "Total" dalam perhitungan
+                if not is_total_row:
+                    vertical_sums[col_idx] += num  # Tambahkan ke total kolom
+                    row_sum += num  # Tambahkan ke total baris
             
             horizontal_sums.append(row_sum)  # Simpan total baris
         
