@@ -55,7 +55,7 @@ def recalculate_tables(doc):
 def recalculate_text(doc):
     for para in doc.paragraphs:
         # Cari pola dalam teks: Rp<nilai> (<operasi>)
-        match = re.search(r'Rp([\d.,]+)\s*\(([\d.,+\-*/:\(\)]+)\)', para.text)
+        match = re.search(r'Rp([\d.,]+)\s*\(([\d.,+\-*/:–\(\)]+)\)', para.text)
         if match:
             original_total = float(match.group(1).replace('.', '').replace(',', '.'))  # Nilai sebelum tanda kurung
             operation = match.group(2)  # Operasi di dalam tanda kurung
