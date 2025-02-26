@@ -23,6 +23,9 @@ def recalculate_tables(doc_path):
         for row_idx, row in enumerate(table.rows):
             row_sum = 0.0  # Total baris
             
+            # Deteksi baris "Jumlah"
+            is_total_row = any("JUMLAH" in cell.text.upper() for cell in row.cells)
+            
             for col_idx, cell in enumerate(row.cells):
                 value = cell.text.strip()
                 
@@ -30,8 +33,11 @@ def recalculate_tables(doc_path):
                 cleaned_value = value.replace('.', '').replace(',', '.')  # Bersihkan format angka
                 if re.match(r'^\d+\.?\d*$', cleaned_value):  # Cek apakah ini angka
                     num = float(cleaned_value)
-                    vertical_sums[col_idx] += num  # Tambahkan ke total kolom
-                    row_sum += num  # Tambahkan ke total baris
+                    
+                    # Abaikan baris "Jumlah" dalam perhitungan
+                    if not is_total_row:
+                        vertical_sums[col_idx] += num  # Tambahkan ke total kolom
+                        row_sum += num  # Tambahkan ke total baris
             
             horizontal_sums.append(row_sum)  # Simpan total baris
         
