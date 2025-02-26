@@ -54,31 +54,38 @@ def recalculate_tables(doc):
 # Fungsi rekalkulasi teks dalam paragraf
 def recalculate_text(doc):
     for para in doc.paragraphs:
-        # Cari pola dalam teks: Rp<nilai> (<operasi>)
-        match = re.search(r'Rp([\d.,]+)\s*\(([\d.,+\-*/:–\(\)]+)\)', para.text)
+        # Cari pola dalam teks: Rp<nilai>(<operasi>)
+        match = re.search(r'Rp([\d.,]+)\.?\s*\(([^)]+)\)', para.text)
         if match:
-            original_total = float(match.group(1).replace('.', '').replace(',', '.'))  # Nilai sebelum tanda kurung
-            operation = match.group(2)  # Operasi di dalam tanda kurung
-            
-            # Validasi dan ubah operator ":" menjadi "/"
-            operation = operation.replace(':', '/')  # Ganti ":" dengan "/"
-            operation = operation.replace('–', '-')  # Ganti minus panjang dengan minus pendek
-            
-            # Ekstrak semua angka dan operator dari operasi
+            original_total_str = match.group(1).replace('.', '').replace(',', '.')
+            original_total = float(original_total_str)
+            operation = match.group(2)
+
+            # Membersihkan operator yang tidak standar
+            operation = operation.replace(':', '/').replace('–', '-').replace('−', '-')
+
+            # Proses semua nilai Rp dalam operasi
+            operation_clean_rp = re.sub(
+                r'Rp\s*([\d.,]+)', 
+                lambda m: m.group(1).replace('.', '').replace(',', '.'), 
+                operation
+            )
+
+            # Proses angka dengan pemisah ribuan (.) dan desimal (,)
+            operation_clean = re.sub(
+                r'(\d{1,3}(?:\.\d{3})*(?:,\d+)?)', 
+                lambda m: m.group().replace('.', '').replace(',', '.'), 
+                operation_clean_rp
+            )
+
             try:
-                # Ubah format angka ke float dan evaluasi operasi
-                cleaned_operation = re.sub(
-                    r'([\d.,]+)', 
-                    lambda x: str(float(x.group().replace('.', '').replace(',', '.'))), 
-                    operation
-                )
-                
                 # Evaluasi operasi menggunakan eval()
-                recalculated_total = eval(cleaned_operation)
-                
+                recalculated_total = eval(operation_clean)
+                recalculated_total = round(recalculated_total, 2)
+                original_total = round(original_total, 2)
+
                 # Bandingkan hasil rekalkulasi dengan nilai asli
-                if round(original_total, 2) != round(recalculated_total, 2):
-                    # Tambahkan hasil rekalkulasi setelah tanda kurung
+                if original_total != recalculated_total:
                     recalculated_text = f" = Rp{recalculated_total:,.2f}".replace(',', 'temp').replace('.', ',').replace('temp', '.')
                     para.text = para.text[:match.end()] + recalculated_text
                     _highlight_discrepancy(para, match.end(), len(para.text))
