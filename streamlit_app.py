@@ -62,7 +62,10 @@ def recalculate_text(doc):
             operation = match.group(2)
 
             # Membersihkan operator yang tidak standar
-            operation = operation.replace(':', '/').replace('–', '-').replace('−', '-')
+            operation = operation.replace(':', '/').replace('x', '*').replace('–', '-').replace('−', '-')
+            
+            # Hapus teks non-matematika (misalnya, "hari")
+            operation = re.sub(r'[a-zA-Z\s]+', '', operation)
 
             # Proses semua nilai Rp dalam operasi
             operation_clean_rp = re.sub(
