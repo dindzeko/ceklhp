@@ -61,6 +61,11 @@ def recalculate_text(doc):
             original_total = float(original_total_str)
             operation = match.group(2)
 
+            # Validasi input kosong
+            if not operation.strip():
+                st.warning(f"Operasi kosong ditemukan: '{para.text}'")
+                continue
+
             # Membersihkan operator yang tidak standar
             operation = operation.replace(':', '/').replace('x', '*').replace('–', '-').replace('−', '-')
             
