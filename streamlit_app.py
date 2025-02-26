@@ -14,43 +14,37 @@ def recalculate_tables(doc_path):
     doc = Document(doc_path)
     
     for table in doc.tables:
-        # Cari baris JUMLAH
-        total_row = None
-        for i, row in enumerate(table.rows):
-            if 'JUMLAH' in row.cells[0].text:
-                total_row = i
-                break
+        # Inisialisasi variabel untuk rekalkulasi
+        num_cols = len(table.columns)
+        vertical_sums = [0.0] * num_cols  # Untuk menjumlahkan kolom angka
+        horizontal_sums = []  # Untuk menyimpan total baris
         
-        if total_row is not None:
-            # Tambahkan baris Rekalkulasi
-            new_row = table.add_row()
-            new_row.cells[0].text = "Rekalkulasi"
+        # Proses setiap baris dalam tabel
+        for row_idx, row in enumerate(table.rows):
+            row_sum = 0.0  # Total baris
             
-            # Hitung ulang vertical dan horizontal
-            num_cols = len(table.columns)
-            vertical_sums = [0.0] * num_cols
-            horizontal_sums = [0.0] * (len(table.rows) - 1)
-            
-            for row_idx, row in enumerate(table.rows):
-                for col_idx, cell in enumerate(row.cells):
-                    if row_idx == total_row or row_idx == len(table.rows) - 1:
-                        continue
-                    
-                    # Ekstrak angka dari kolom nilai
-                    if col_idx >= 2:  # Asumsi kolom angka mulai dari kolom ke-3
-                        value = cell.text.replace('.', '').replace(',', '.')
-                        if re.match(r'^\d+\.?\d*$', value):
-                            num = float(value)
-                            vertical_sums[col_idx] += num
-                            horizontal_sums[row_idx] += num
-            
-            # Format baris Rekalkulasi
-            for col_idx in range(num_cols):
-                cell = new_row.cells[col_idx]
-                if col_idx >= 2:
-                    cell.text = f"{vertical_sums[col_idx]:,.2f}".replace(',', 'temp').replace('.', ',').replace('temp', '.')
-                _set_font(cell)
+            for col_idx, cell in enumerate(row.cells):
+                value = cell.text.strip()
                 
+                # Coba ekstrak angka dari sel
+                cleaned_value = value.replace('.', '').replace(',', '.')  # Bersihkan format angka
+                if re.match(r'^\d+\.?\d*$', cleaned_value):  # Cek apakah ini angka
+                    num = float(cleaned_value)
+                    vertical_sums[col_idx] += num  # Tambahkan ke total kolom
+                    row_sum += num  # Tambahkan ke total baris
+            
+            horizontal_sums.append(row_sum)  # Simpan total baris
+        
+        # Tambahkan baris "Rekalkulasi"
+        new_row = table.add_row()
+        new_row.cells[0].text = "Rekalkulasi"
+        
+        for col_idx in range(num_cols):
+            cell = new_row.cells[col_idx]
+            if col_idx >= 1:  # Kolom angka dimulai dari kolom ke-2 (indeks 1)
+                cell.text = f"{vertical_sums[col_idx]:,.2f}".replace(',', 'temp').replace('.', ',').replace('temp', '.')
+            _set_font(cell)
+    
     # Cek pola dalam teks
     for para in doc.paragraphs:
         match = re.search(r'Rp([\d.,]+)\s*\(Rp([\d.,]+)\s*\+\s*Rp([\d.,]+)\)', para.text)
@@ -59,8 +53,13 @@ def recalculate_tables(doc_path):
             part1 = float(match.group(2).replace('.', '').replace(',', '.'))
             part2 = float(match.group(3).replace('.', '').replace(',', '.'))
             
-            if abs(total - (part1 + part2)) > 0.01:
-                _highlight_discrepancy(para, match.start(), match.end())
+            recalculated_total = part1 + part2
+            if abs(total - recalculated_total) > 0.01:
+                # Tambahkan hasil rekalkulasi di sebelahnya
+                original_text = para.text[:match.end()]
+                recalculated_text = f" = Rp{recalculated_total:,.2f}".replace(',', 'temp').replace('.', ',').replace('temp', '.')
+                para.text = original_text + recalculated_text
+                _highlight_discrepancy(para, match.end(), len(para.text))
     
     return doc
 
