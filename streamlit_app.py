@@ -55,24 +55,29 @@ def recalculate_tables(doc):
 def recalculate_text(doc):
     for para in doc.paragraphs:
         # Cari pola dalam teks: Rp<nilai> (<operasi>)
-        match = re.search(r'Rp([\d.,]+)\s*\(([\d.,]+\s*[-+*/:]\s*[\d.,]+(?:\s*[-+*/:]\s*[\d.,]+)*)\)', para.text)
+        match = re.search(r'Rp([\d.,]+)\s*\(([\d.,+\-*/:\(\)]+)\)', para.text)
         if match:
             original_total = float(match.group(1).replace('.', '').replace(',', '.'))  # Nilai sebelum tanda kurung
             operation = match.group(2)  # Operasi di dalam tanda kurung
             
             # Validasi dan ubah operator ":" menjadi "/"
             operation = operation.replace(':', '/')  # Ganti ":" dengan "/"
+            operation = operation.replace('–', '-')  # Ganti minus panjang dengan minus pendek
             
             # Ekstrak semua angka dan operator dari operasi
             try:
                 # Ubah format angka ke float dan evaluasi operasi
-                cleaned_operation = re.sub(r'(\d+\.?\d*)', lambda x: str(float(x.group().replace('.', '').replace(',', '.'))), operation)
+                cleaned_operation = re.sub(
+                    r'([\d.,]+)', 
+                    lambda x: str(float(x.group().replace('.', '').replace(',', '.'))), 
+                    operation
+                )
                 
                 # Evaluasi operasi menggunakan eval()
                 recalculated_total = eval(cleaned_operation)
                 
                 # Bandingkan hasil rekalkulasi dengan nilai asli
-                if abs(original_total - recalculated_total) > 0.01:
+                if round(original_total, 2) != round(recalculated_total, 2):
                     # Tambahkan hasil rekalkulasi setelah tanda kurung
                     recalculated_text = f" = Rp{recalculated_total:,.2f}".replace(',', 'temp').replace('.', ',').replace('temp', '.')
                     para.text = para.text[:match.end()] + recalculated_text
@@ -111,7 +116,6 @@ def _highlight_discrepancy(para, start, end):
 
 # Upload file
 uploaded_file = st.file_uploader("Upload File Word (.docx)", type=["docx"])
-
 if uploaded_file:
     try:
         # Simpan file upload sementara
