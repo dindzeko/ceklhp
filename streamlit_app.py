@@ -1,8 +1,15 @@
-import re
+import streamlit as st
 from docx import Document
 from docx.shared import Pt, RGBColor
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
+import re
+import io
 
+# Judul aplikasi
+st.title("📝 Aplikasi Rekalkulasi Tabel Dokumen Word")
+st.write("Upload dokumen Word (.docx) untuk merekalkulasi tabel dan memeriksa angka dalam tanda kurung.")
+
+# Fungsi rekalkulasi tabel
 def recalculate_tables(doc_path):
     doc = Document(doc_path)
     
@@ -22,11 +29,11 @@ def recalculate_tables(doc_path):
             # Hitung ulang vertical dan horizontal
             num_cols = len(table.columns)
             vertical_sums = [0.0] * num_cols
-            horizontal_sums = [0.0] * len(table.rows)-1
+            horizontal_sums = [0.0] * (len(table.rows) - 1)
             
             for row_idx, row in enumerate(table.rows):
                 for col_idx, cell in enumerate(row.cells):
-                    if row_idx == total_row or row_idx == len(table.rows)-1:
+                    if row_idx == total_row or row_idx == len(table.rows) - 1:
                         continue
                     
                     # Ekstrak angka dari kolom nilai
@@ -42,7 +49,7 @@ def recalculate_tables(doc_path):
                 cell = new_row.cells[col_idx]
                 if col_idx >= 2:
                     cell.text = f"{vertical_sums[col_idx]:,.2f}".replace(',', 'temp').replace('.', ',').replace('temp', '.')
-                self._set_font(cell)
+                _set_font(cell)
                 
     # Cek pola dalam teks
     for para in doc.paragraphs:
@@ -53,10 +60,11 @@ def recalculate_tables(doc_path):
             part2 = float(match.group(3).replace('.', '').replace(',', '.'))
             
             if abs(total - (part1 + part2)) > 0.01:
-                self._highlight_discrepancy(para, match.start(), match.end())
+                _highlight_discrepancy(para, match.start(), match.end())
     
-    doc.save('rekalkulasi.docx')
+    return doc
 
+# Fungsi untuk mengatur font
 def _set_font(cell):
     for paragraph in cell.paragraphs:
         paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.RIGHT
@@ -65,6 +73,7 @@ def _set_font(cell):
             run.font.name = 'Times New Roman'
             run.font.size = Pt(11)
 
+# Fungsi untuk menyorot ketidaksesuaian
 def _highlight_discrepancy(para, start, end):
     text = para.text
     para.clear()
@@ -74,7 +83,7 @@ def _highlight_discrepancy(para, start, end):
         para.add_run(text[:start])
     
     # Tambahkan discrepancy dengan highlight
- discrepancy_run = para.add_run(text[start:end])
+    discrepancy_run = para.add_run(text[start:end])
     discrepancy_run.font.color.rgb = RGBColor(255, 0, 0)
     discrepancy_run.font.name = 'Times New Roman'
     discrepancy_run.font.size = Pt(11)
@@ -84,5 +93,32 @@ def _highlight_discrepancy(para, start, end):
     if end < len(text):
         para.add_run(text[end:])
 
-if __name__ == "__main__":
-    recalculate_tables('input.docx')
+# Upload file
+uploaded_file = st.file_uploader("Upload File Word (.docx)", type=["docx"])
+
+if uploaded_file:
+    try:
+        # Simpan file upload sementara
+        with open("input.docx", "wb") as f:
+            f.write(uploaded_file.getvalue())
+        
+        # Proses rekalkulasi
+        processed_doc = recalculate_tables("input.docx")
+        
+        # Simpan hasil rekalkulasi ke BytesIO
+        output = io.BytesIO()
+        processed_doc.save(output)
+        output.seek(0)
+        
+        # Tampilkan pesan sukses
+        st.success("Rekalkulasi selesai! Silakan unduh hasil di bawah.")
+        
+        # Tombol unduh
+        st.download_button(
+            label="📥 Unduh Hasil Rekalkulasi",
+            data=output,
+            file_name="rekalkulasi.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        )
+    except Exception as e:
+        st.error(f"Terjadi kesalahan: {str(e)}")
