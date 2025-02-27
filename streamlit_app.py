@@ -10,7 +10,6 @@ st.write("Upload dokumen Word (.docx) untuk merekalkulasi tabel.")
 
 def recalculate_tables(doc):
     for table in doc.tables:
-        # Skip tabel dengan kolom kurang dari 3
         if len(table.columns) < 3:
             continue
         
@@ -18,21 +17,15 @@ def recalculate_tables(doc):
         vertical_sums = [0.0] * num_cols
         
         for row in table.rows:
-            # Skip baris dengan kolom tidak lengkap
-            if len(row.cells) != num_cols:
-                continue
-            
-            # Deteksi baris total (Jumlah/Total atau pola khusus)
-            is_total_row = (
-                "JUMLAH" in row.cells[0].text.upper() or 
-                "TOTAL" in row.cells[0].text.upper() or
-                (len(row.cells) > 2 and 
-                 row.cells[0].text.strip() == "" and 
-                 row.cells[1].text.strip() == "")
+            # Deteksi baris total dengan keyword di kolom mana pun
+            is_total_row = any(
+                keyword in cell.text.upper() 
+                for keyword in ["JUMLAH", "TOTAL"] 
+                for cell in row.cells
             )
             
             if is_total_row:
-                continue
+                continue  # Lewati baris total
             
             # Proses kolom numerik (mulai dari kolom ke-3)
             for col_idx in range(2, num_cols):
@@ -42,7 +35,7 @@ def recalculate_tables(doc):
                 cell = row.cells[col_idx]
                 value = cell.text.strip().replace('.', '').replace(',', '.')
                 
-                # Handle tanda strip (-) sebagai 0
+                # Handle tanda strip (-) atau sel kosong
                 if value == '-' or value == '':
                     num = 0.0
                 elif re.match(r'^-?\d+\.?\d*$', value):
@@ -56,7 +49,7 @@ def recalculate_tables(doc):
         
         # Tambahkan baris rekalkulasi
         new_row = table.add_row()
-        new_row.cells[0].text = "Rekalkulasi Baru"
+        new_row.cells[0].text = "Rekalkulasi"
         
         for col_idx in range(num_cols):
             if col_idx >= len(new_row.cells):
