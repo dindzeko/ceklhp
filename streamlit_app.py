@@ -17,12 +17,15 @@ def recalculate_tables(doc):
         vertical_sums = [0.0] * num_cols
         
         for row in table.rows:
-            # Deteksi baris total dengan keyword di kolom mana pun
-            is_total_row = any(
-                keyword in cell.text.upper() 
-                for keyword in ["JUMLAH", "TOTAL"] 
-                for cell in row.cells
-            )
+            # Deteksi baris total dengan lebih spesifik
+            is_total_row = False
+            
+            # Cek kolom pertama untuk keyword "Jumlah/Total"
+            if len(row.cells) > 0 and "JUMLAH" in row.cells[0].text.upper():
+                is_total_row = True
+            # Cek jika baris memiliki pola total (kolom 1 dan 2 kosong)
+            elif len(row.cells) > 2 and row.cells[0].text.strip() == "" and row.cells[1].text.strip() == "":
+                is_total_row = True
             
             if is_total_row:
                 continue  # Lewati baris total
@@ -49,7 +52,7 @@ def recalculate_tables(doc):
         
         # Tambahkan baris rekalkulasi
         new_row = table.add_row()
-        new_row.cells[0].text = "Rekalkulasi"
+        new_row.cells[0].text = "Rekalkulasi Baru"
         
         for col_idx in range(num_cols):
             if col_idx >= len(new_row.cells):
