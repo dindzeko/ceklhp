@@ -14,21 +14,33 @@ def recalculate_tables(doc):
         vertical_sums = [0.0] * num_cols
         
         for row in table.rows:
-            # Skip baris yang mengandung "JUMLAH" atau "TOTAL"
-            if any(keyword in cell.text.upper() for keyword in ["JUMLAH", "TOTAL"] for cell in row.cells):
-                continue
+            # Deteksi baris total (tanpa keyword) berdasarkan kolom kosong
+            is_total_row = any(
+                keyword in cell.text.upper() for keyword in ["JUMLAH", "TOTAL"] for cell in row.cells
+            ) or (
+                len(row.cells) > 2 and 
+                row.cells[0].text.strip() == "" and 
+                row.cells[1].text.strip() == ""
+            )
             
-            for col_idx, cell in enumerate(row.cells):
-                value = cell.text.strip()
-                cleaned_value = value.replace('.', '').replace(',', '.')
+            if is_total_row:
+                continue  # Lewati baris total
+            
+            for col_idx in range(num_cols):
+                # Proses hanya kolom numerik (mulai dari kolom ke-3)
+                if col_idx < 2:
+                    continue
+                
+                cell = row.cells[col_idx]
+                value = cell.text.strip().replace('.', '').replace(',', '.')
                 
                 # Validasi format angka
-                if re.match(r'^-?\d+\.?\d*$', cleaned_value):
-                    num = float(cleaned_value)
-                elif re.match(r'^\(\d+\.?\d*\)$', cleaned_value):  # Format (12345)
-                    num = -float(cleaned_value[1:-1])
+                if re.match(r'^-?\d+\.?\d*$', value):
+                    num = float(value)
+                elif re.match(r'^\(\d+\.?\d*\)$', value):  # Format (12345)
+                    num = -float(value[1:-1])
                 else:
-                    continue  # Lewati jika bukan angka valid
+                    continue
                 
                 vertical_sums[col_idx] += num
         
@@ -38,7 +50,7 @@ def recalculate_tables(doc):
         
         for col_idx in range(num_cols):
             cell = new_row.cells[col_idx]
-            if col_idx > 0:
+            if col_idx >= 2:  # Format hanya kolom numerik
                 formatted_num = f"{vertical_sums[col_idx]:,.2f}".replace(',', 'temp').replace('.', ',').replace('temp', '.')
                 cell.text = formatted_num
             _set_font(cell)
@@ -54,11 +66,9 @@ def _set_font(cell):
 uploaded_file = st.file_uploader("Upload File Word (.docx)", type=["docx"])
 if uploaded_file:
     try:
-        # Proses file
         doc = Document(uploaded_file)
         recalculate_tables(doc)
         
-        # Simpan ke BytesIO
         output = io.BytesIO()
         doc.save(output)
         output.seek(0)
