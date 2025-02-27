@@ -10,7 +10,7 @@ st.write("Upload dokumen Word (.docx) untuk merekalkulasi tabel.")
 
 def recalculate_tables(doc):
     for table in doc.tables:
-        # Pastikan tabel memiliki setidaknya 3 kolom
+        # Skip tabel dengan kolom kurang dari 3
         if len(table.columns) < 3:
             continue
         
@@ -18,38 +18,36 @@ def recalculate_tables(doc):
         vertical_sums = [0.0] * num_cols
         
         for row in table.rows:
-            # Cek apakah baris memiliki cukup kolom
-            if len(row.cells) < num_cols:
+            # Skip baris dengan kolom tidak lengkap
+            if len(row.cells) != num_cols:
                 continue
             
-            # Deteksi baris total (tanpa keyword) berdasarkan kolom kosong
-            is_total_row = any(
-                keyword in cell.text.upper() for keyword in ["JUMLAH", "TOTAL"] for cell in row.cells
-            ) or (
-                len(row.cells) > 2 and 
-                row.cells[0].text.strip() == "" and 
-                row.cells[1].text.strip() == ""
+            # Deteksi baris total (Jumlah/Total atau pola khusus)
+            is_total_row = (
+                "JUMLAH" in row.cells[0].text.upper() or 
+                "TOTAL" in row.cells[0].text.upper() or
+                (len(row.cells) > 2 and 
+                 row.cells[0].text.strip() == "" and 
+                 row.cells[1].text.strip() == "")
             )
             
             if is_total_row:
-                continue  # Lewati baris total
+                continue
             
-            for col_idx in range(num_cols):
-                # Proses hanya kolom numerik (mulai dari kolom ke-3)
-                if col_idx < 2:
-                    continue
-                
-                # Pastikan kolom ada sebelum diakses
+            # Proses kolom numerik (mulai dari kolom ke-3)
+            for col_idx in range(2, num_cols):
                 if col_idx >= len(row.cells):
                     continue
                 
                 cell = row.cells[col_idx]
                 value = cell.text.strip().replace('.', '').replace(',', '.')
                 
-                # Validasi format angka
-                if re.match(r'^-?\d+\.?\d*$', value):
+                # Handle tanda strip (-) sebagai 0
+                if value == '-' or value == '':
+                    num = 0.0
+                elif re.match(r'^-?\d+\.?\d*$', value):
                     num = float(value)
-                elif re.match(r'^\(\d+\.?\d*\)$', value):  # Format (12345)
+                elif re.match(r'^\(\d+\.?\d*\)$', value):
                     num = -float(value[1:-1])
                 else:
                     continue
@@ -58,15 +56,14 @@ def recalculate_tables(doc):
         
         # Tambahkan baris rekalkulasi
         new_row = table.add_row()
-        new_row.cells[0].text = "Rekalkulasi"
+        new_row.cells[0].text = "Rekalkulasi Baru"
         
         for col_idx in range(num_cols):
-            # Pastikan kolom ada sebelum diakses
             if col_idx >= len(new_row.cells):
                 break
             
             cell = new_row.cells[col_idx]
-            if col_idx >= 2:  # Format hanya kolom numerik
+            if col_idx >= 2:
                 formatted_num = f"{vertical_sums[col_idx]:,.2f}".replace(',', 'temp').replace('.', ',').replace('temp', '.')
                 cell.text = formatted_num
             _set_font(cell)
