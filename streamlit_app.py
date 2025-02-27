@@ -10,10 +10,18 @@ st.write("Upload dokumen Word (.docx) untuk merekalkulasi tabel.")
 
 def recalculate_tables(doc):
     for table in doc.tables:
+        # Pastikan tabel memiliki setidaknya 3 kolom
+        if len(table.columns) < 3:
+            continue
+        
         num_cols = len(table.columns)
         vertical_sums = [0.0] * num_cols
         
         for row in table.rows:
+            # Cek apakah baris memiliki cukup kolom
+            if len(row.cells) < num_cols:
+                continue
+            
             # Deteksi baris total (tanpa keyword) berdasarkan kolom kosong
             is_total_row = any(
                 keyword in cell.text.upper() for keyword in ["JUMLAH", "TOTAL"] for cell in row.cells
@@ -29,6 +37,10 @@ def recalculate_tables(doc):
             for col_idx in range(num_cols):
                 # Proses hanya kolom numerik (mulai dari kolom ke-3)
                 if col_idx < 2:
+                    continue
+                
+                # Pastikan kolom ada sebelum diakses
+                if col_idx >= len(row.cells):
                     continue
                 
                 cell = row.cells[col_idx]
@@ -49,6 +61,10 @@ def recalculate_tables(doc):
         new_row.cells[0].text = "Rekalkulasi"
         
         for col_idx in range(num_cols):
+            # Pastikan kolom ada sebelum diakses
+            if col_idx >= len(new_row.cells):
+                break
+            
             cell = new_row.cells[col_idx]
             if col_idx >= 2:  # Format hanya kolom numerik
                 formatted_num = f"{vertical_sums[col_idx]:,.2f}".replace(',', 'temp').replace('.', ',').replace('temp', '.')
