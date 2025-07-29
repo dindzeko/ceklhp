@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import numpy as np
 
 # Judul aplikasi
-st.title("📅 Aplikasi Harga Saham 15 Hari Perdagangan Terakhir")
+st.title("📊 Aplikasi Harga Saham 15 Hari Perdagangan Terakhir")
 st.write("""
 Upload file Excel berisi daftar ticker saham, pilih tanggal, 
 lalu ambil harga closing 15 hari perdagangan terakhir hingga tanggal tersebut dari Yahoo Finance.
@@ -68,9 +68,19 @@ if uploaded_file:
                         except Exception as e:
                             data[ticker] = [f"Error: {str(e)}"] * 15
 
-                    # Buat DataFrame dengan label hari
-                    days_labels = [f"H-{15-i}" for i in range(15)]  # H-1 = hari terakhir
-                    result_df = pd.DataFrame(data, index=days_labels)
+                    # Buat DataFrame dengan label hari dan tanggal perdagangan
+                    result_df = pd.DataFrame(data)
+                    
+                    # Ubah index menjadi tanggal perdagangan
+                    trading_dates = result_df.index.to_series().apply(lambda x: x.strftime('%Y-%m-%d'))
+                    result_df.index = trading_dates
+                    
+                    # Transpose DataFrame agar ticker jadi row dan tanggal jadi kolom
+                    result_df = result_df.T
+                    
+                    # Reset index untuk membuat ticker sebagai kolom pertama
+                    result_df.reset_index(inplace=True)
+                    result_df.rename(columns={'index': 'Saham'}, inplace=True)
                     
                     # Tampilkan hasil
                     st.success("Data berhasil diambil!")
@@ -79,21 +89,20 @@ if uploaded_file:
 
                     # Grafik
                     st.write("### Grafik Harga Closing")
-                    chart_data = result_df.T
-                    # Hanya plot jika tidak ada string
+                    chart_data = result_df.set_index('Saham').T
                     numeric_data = chart_data.apply(pd.to_numeric, errors='coerce')
                     if not numeric_data.isnull().all().all():
                         st.line_chart(numeric_data)
                     else:
                         st.info("Tidak ada data numerik untuk ditampilkan dalam grafik.")
 
-                    # Download CSV
-                    csv = result_df.to_csv().encode('utf-8')
+                    # Download Excel
+                    output_filename = f"harga_closing_15hari_hingga_{selected_date}.xlsx"
                     st.download_button(
-                        label="📥 Download sebagai CSV",
-                        data=csv,
-                        file_name=f"harga_closing_15hari_hingga_{selected_date}.csv",
-                        mime="text/csv"
+                        label="📥 Download sebagai Excel",
+                        data=result_df.to_excel(index=False),
+                        file_name=output_filename,
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     )
 
     except Exception as e:
@@ -102,9 +111,9 @@ else:
     st.info("Silakan upload file Excel yang berisi kolom 'Ticker'.")
     st.markdown("""
     **Contoh format file Excel:**
-    | Ticker  |
-    |---------|
-    | BBCA.JK |
-    | TLKM.JK |
-    | UNVR.JK |
+    | Ticker   |
+    |----------|
+    | BBCA.JK  |
+    | UNVR.JK  |
+    | TLKM.JK  |
     """)
