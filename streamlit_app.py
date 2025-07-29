@@ -71,9 +71,14 @@ if uploaded_file:
                     # Buat DataFrame dengan label hari dan tanggal perdagangan
                     result_df = pd.DataFrame(data)
                     
-                    # Ubah index menjadi tanggal perdagangan
-                    trading_dates = result_df.index.to_series().apply(lambda x: x.strftime('%Y-%m-%d'))
-                    result_df.index = trading_dates
+                    # Pastikan indeks adalah tipe datetime
+                    if isinstance(result_df.index[0], int):
+                        # Jika indeks adalah integer, konversi ke datetime
+                        trading_dates = pd.date_range(end=end_date, periods=len(result_df.index), freq='B')[-15:]
+                        result_df.index = trading_dates
+                    else:
+                        # Jika indeks sudah datetime, gunakan strftime
+                        trading_dates = result_df.index.to_series().apply(lambda x: x.strftime('%Y-%m-%d'))
                     
                     # Transpose DataFrame agar ticker jadi row dan tanggal jadi kolom
                     result_df = result_df.T
