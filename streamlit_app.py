@@ -88,6 +88,7 @@ if st.button("🔍 Ambil Data"):
 
             # Download Excel
             output = io.BytesIO()
+            result_df = result_df.astype(str)  # konversi semua kolom ke string agar tidak error
             result_df.to_excel(output, index=False)
             st.download_button(
                 label="📥 Download sebagai Excel",
