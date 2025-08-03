@@ -7,17 +7,17 @@ import time
 
 # Konfigurasi halaman
 st.set_page_config(
-    page_title="Aplikasi Data Saham Lengkap",
+    page_title="Aplikasi Tarik Data Saham",
     page_icon="📈",
     layout="centered"
 )
 
 # Judul aplikasi
-st.title("📊 Aplikasi Data Saham Lengkap")
+st.title("📊 Aplikasi Tarik Data Saham")
 st.markdown("""
 <div style="background-color:#f0f2f6;padding:10px;border-radius:10px;margin-bottom:20px">
     <p style='text-align:center;font-size:16px;color:#333333'>
-    Ambil data saham dengan harga aktual dan disesuaikan dari Yahoo Finance
+    Mengambil Data Saham dengan harga aktual dan disesuaikan dari Yahoo Finance
     </p>
 </div>
 """, unsafe_allow_html=True)
