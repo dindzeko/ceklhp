@@ -3,7 +3,6 @@ import pandas as pd
 import yfinance as yf
 from datetime import datetime, timedelta
 import io
-import numpy as np
 import time
 
 # Konfigurasi halaman
@@ -18,26 +17,10 @@ st.title("📊 Aplikasi Data Saham Akurat")
 st.markdown("""
 <div style="background-color:#f0f2f6;padding:10px;border-radius:10px;margin-bottom:20px">
     <p style='text-align:center;font-size:16px;color:#333333'>
-    Ambil data historis saham dari Yahoo Finance <br><span style="color:red;font-weight:bold">Dengan opsi harga aktual atau disesuaikan</span>
+    Ambil data historis saham langsung dari Yahoo Finance
     </p>
 </div>
 """, unsafe_allow_html=True)
-
-# Informasi penting tentang perbedaan harga
-with st.expander("ℹ️ Mengapa harga berbeda dengan tampilan di web?", expanded=False):
-    st.markdown("""
-    **Perbedaan harga bisa terjadi karena:**
-    1. **Harga Disesuaikan (Adjusted Close)**:
-        - Sudah dikoreksi untuk corporate actions (stock split, dividen, right issue)
-        - Menunjukkan return sebenarnya
-        - Default di yfinance
-        
-    2. **Harga Aktual (Unadjusted Close)**:
-        - Harga penutupan sesungguhnya di hari tersebut
-        - Sama seperti yang ditampilkan di web Yahoo Finance
-        
-    Untuk analisis harga historis aktual, pilih **Harga Aktual**. Untuk analisis return, pilih **Harga Disesuaikan**.
-    """)
 
 # Pilih Time Frame
 st.subheader("⚙️ Pengaturan Data")
@@ -47,11 +30,19 @@ with col1:
 with col2:
     days = st.number_input("**Jumlah hari perdagangan:**", min_value=1, max_value=60, value=10)
 
-# Pilihan jenis harga
-price_type = st.radio("**Jenis Harga:**", 
-                     ["Harga Disesuaikan (Adj Close)", "Harga Aktual (Close)"],
-                     index=0,
-                     horizontal=True)
+# Informasi penting tentang perbedaan harga
+with st.expander("ℹ️ Mengapa harga bisa berbeda?", expanded=False):
+    st.markdown("""
+    **Perbedaan harga biasanya karena:**
+    - **Harga Disesuaikan (Adjusted)**: 
+        - Sudah dikoreksi untuk corporate actions (stock split, dividen)
+        - Default di library yfinance
+    - **Harga Aktual (Unadjusted)**:
+        - Harga penutupan sesungguhnya di hari tersebut
+        - Sama seperti di website Yahoo Finance
+        
+    Untuk analisis harga historis aktual, selalu pilih **Harga Aktual**.
+    """)
 
 # Input metode ticker
 st.subheader("📋 Input Ticker Saham")
@@ -105,8 +96,14 @@ if st.button("🚀 Ambil Data Saham", use_container_width=True, type="primary"):
                 status_text.text(f"⏳ Mengambil data {ticker} ({i+1}/{len(tickers_list)})")
                 progress_bar.progress((i+1) / len(tickers_list))
                 
+                # Ambil data dengan harga aktual (unadjusted)
                 stock = yf.Ticker(ticker)
-                hist = stock.history(start=start_date, end=end_date, interval=timeframe, auto_adjust=False)
+                hist = stock.history(
+                    start=start_date, 
+                    end=end_date, 
+                    interval=timeframe,
+                    auto_adjust=False  # Pastikan harga tidak disesuaikan
+                )
                 
                 if hist.empty:
                     st.warning(f"⚠️ Data kosong untuk {ticker}")
@@ -114,24 +111,15 @@ if st.button("🚀 Ambil Data Saham", use_container_width=True, type="primary"):
                     time.sleep(0.3)
                     continue
                 
-                # Handle perbedaan kolom tanggal
-                if 'Datetime' in hist.columns:
-                    hist = hist.reset_index().rename(columns={'Datetime': 'Date'})
-                else:
-                    hist = hist.reset_index()
+                # Reset index dan atur kolom tanggal
+                hist = hist.reset_index()
                 
-                # Pilih kolom harga berdasarkan pilihan user
-                if "Harga Aktual" in price_type:
-                    # Simpan harga aktual
-                    hist['Actual Close'] = hist['Close']
-                    
-                    # Untuk data harian, tambahkan kolom harga disesuaikan
-                    if 'Adj Close' in hist.columns:
-                        hist['Adjusted Close'] = hist['Adj Close']
-                else:
-                    # Gunakan adjusted close sebagai close
-                    if 'Adj Close' in hist.columns:
-                        hist['Close'] = hist['Adj Close']
+                # Tangani perbedaan nama kolom tanggal
+                if 'Datetime' in hist.columns:
+                    hist.rename(columns={'Datetime': 'Date'}, inplace=True)
+                
+                # Pastikan kita menggunakan harga penutupan aktual
+                hist['Close'] = hist['Close']  # Harga aktual
                 
                 # Ambil data N hari terakhir
                 hist = hist.sort_values('Date', ascending=False).head(days)
@@ -140,7 +128,7 @@ if st.button("🚀 Ambil Data Saham", use_container_width=True, type="primary"):
                 # Konversi kolom tanggal
                 hist['Date'] = hist['Date'].dt.tz_localize(None)
                 
-                # Format tanggal berbeda untuk intraday/harian
+                # Format tanggal
                 if timeframe == "1d":
                     hist['Date'] = hist['Date'].dt.strftime('%Y-%m-%d')
                 else:
@@ -158,14 +146,9 @@ if st.button("🚀 Ambil Data Saham", use_container_width=True, type="primary"):
         if data_frames:
             result_df = pd.concat(data_frames, ignore_index=True)
             
-            # Reorder kolom
-            preferred_order = ['Ticker', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume']
-            if 'Actual Close' in result_df.columns:
-                preferred_order.insert(6, 'Actual Close')
-            if 'Adjusted Close' in result_df.columns:
-                preferred_order.insert(7, 'Adjusted Close')
-                
-            result_df = result_df.reindex(columns=preferred_order)
+            # Pilih kolom yang relevan
+            columns_to_keep = ['Ticker', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume']
+            result_df = result_df[columns_to_keep]
             
             st.success(f"✅ Berhasil mengambil data {success_count} dari {len(tickers_list)} ticker")
             
@@ -175,16 +158,13 @@ if st.button("🚀 Ambil Data Saham", use_container_width=True, type="primary"):
             # Tampilkan data
             with st.expander("📊 Lihat Data", expanded=True):
                 # Format numerik
-                format_dict = {col: '{:.2f}' for col in ['Open', 'High', 'Low', 'Close']}
-                if 'Actual Close' in result_df.columns:
-                    format_dict['Actual Close'] = '{:.2f}'
-                if 'Adjusted Close' in result_df.columns:
-                    format_dict['Adjusted Close'] = '{:.2f}'
-                format_dict['Volume'] = '{:.0f}'
-                
-                st.dataframe(result_df.style.format(format_dict), 
-                            use_container_width=True,
-                            height=400)
+                st.dataframe(result_df.style.format({
+                    'Open': '{:.2f}',
+                    'High': '{:.2f}',
+                    'Low': '{:.2f}',
+                    'Close': '{:.2f}',
+                    'Volume': '{:,.0f}'
+                }), use_container_width=True, height=400)
             
             # Download Excel
             output = io.BytesIO()
@@ -200,13 +180,13 @@ if st.button("🚀 Ambil Data Saham", use_container_width=True, type="primary"):
                 type="primary"
             )
             
-            # Tampilkan peringatan jika ada perbedaan harga
-            if "Harga Disesuaikan" in price_type:
-                st.warning("""
-                ⚠️ Anda menggunakan **Harga Disesuaikan**:
-                - Harga sudah dikoreksi untuk corporate actions
-                - Mungkin berbeda dari harga aktual yang ditampilkan di web
-                """)
+            # Tips untuk memastikan keakuratan
+            st.info("""
+            **Tips untuk memastikan keakuratan data:**
+            1. Bandingkan dengan data di [Yahoo Finance](https://finance.yahoo.com/)
+            2. Untuk saham Indonesia, pastikan ticker diakhiri dengan .JK (contoh: PTBA.JK)
+            3. Jika ada perbedaan signifikan, cek tanggal corporate actions
+            """)
         else:
             st.error("❌ Tidak ada data yang berhasil diambil. Silakan cek koneksi atau ticker Anda")
         
