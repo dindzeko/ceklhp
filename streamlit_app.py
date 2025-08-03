@@ -13,7 +13,7 @@ st.subheader("Time Frame")
 timeframe = st.radio("Pilih interval data:", ["30m", "60m", "1d"], index=2, horizontal=True)
 
 # Input jumlah hari perdagangan
-days = st.number_input("Masukkan jumlah hari perdagangan yang ingin diambil:", min_value=1, max_value=180, value=15)
+days = st.number_input("Masukkan jumlah hari perdagangan yang ingin diambil:", min_value=1, max_value=60, value=10)
 
 # Input metode ticker
 st.subheader("Ticker Saham")
@@ -49,10 +49,9 @@ if st.button("🔍 Ambil Data"):
     else:
         with st.spinner("Mengambil data dari Yahoo Finance..."):
             end_date = datetime.today()
-            start_date = end_date - timedelta(days=days * 2)  # ambil lebih banyak untuk antisipasi hari libur
+            start_date = end_date - timedelta(days=days * 2)  # ambil range lebih panjang untuk antisipasi libur
 
-            data = {}
-            date_index = None
+            data_frames = []
 
             for ticker in tickers_list:
                 try:
@@ -60,39 +59,35 @@ if st.button("🔍 Ambil Data"):
                     hist = stock.history(start=start_date, end=end_date, interval=timeframe)
 
                     if hist.empty:
-                        data[ticker] = [np.nan] * days
+                        st.warning(f"Tidak ada data untuk {ticker}")
                         continue
 
-                    # Ambil harga Close terakhir sesuai jumlah hari
-                    closing_prices = hist['Close'].sort_index(ascending=False).head(days)[::-1]
+                    # Ambil hanya data N hari terakhir
+                    hist = hist.reset_index()
+                    hist['Date'] = hist['Datetime' if 'Datetime' in hist.columns else 'Date'].dt.date
+                    last_dates = sorted(hist['Date'].unique())[-days:]
+                    hist = hist[hist['Date'].isin(last_dates)]
+                    hist.insert(0, 'Ticker', ticker)
+                    data_frames.append(hist)
 
-                    # Set index tanggal hanya sekali
-                    if date_index is None:
-                        date_index = closing_prices.index
+                except Exception as e:
+                    st.error(f"Gagal mengambil data {ticker}: {e}")
 
-                    data[ticker] = closing_prices.tolist()
+            if data_frames:
+                result_df = pd.concat(data_frames, ignore_index=True)
 
-                except Exception:
-                    data[ticker] = [np.nan] * days
+                st.success("✅ Data berhasil diambil!")
+                st.dataframe(result_df)
 
-            # Buat DataFrame hasil
-            result_df = pd.DataFrame(data)
-            if date_index is not None:
-                result_df.index = date_index
-
-            result_df.reset_index(inplace=True)
-            result_df.rename(columns={'index': 'Tanggal'}, inplace=True)
-
-            st.success("✅ Data berhasil diambil!")
-            st.dataframe(result_df)
-
-            # Download Excel
-            output = io.BytesIO()
-            result_df = result_df.astype(str)  # konversi semua kolom ke string agar tidak error
-            result_df.to_excel(output, index=False)
-            st.download_button(
-                label="📥 Download sebagai Excel",
-                data=output,
-                file_name=f"data_saham_{timeframe}_{days}hari.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+                # Download Excel
+                output = io.BytesIO()
+                result_df = result_df.astype(str)  # konversi semua kolom jadi string
+                result_df.to_excel(output, index=False)
+                st.download_button(
+                    label="📥 Download sebagai Excel",
+                    data=output,
+                    file_name=f"data_saham_{timeframe}_{days}hari.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+            else:
+                st.warning("Tidak ada data yang berhasil diambil.")
