@@ -7,17 +7,17 @@ import time
 
 # Konfigurasi halaman
 st.set_page_config(
-    page_title="Aplikasi Tarik Data Saham",
+    page_title="Aplikasi Data Saham Lengkap",
     page_icon="📈",
     layout="centered"
 )
 
 # Judul aplikasi
-st.title("📊 Aplikasi Tarik Data Saham")
+st.title("📊 Aplikasi Data Saham Lengkap")
 st.markdown("""
 <div style="background-color:#f0f2f6;padding:10px;border-radius:10px;margin-bottom:20px">
     <p style='text-align:center;font-size:16px;color:#333333'>
-    Mengambil Data Saham dengan harga aktual dan disesuaikan dari Yahoo Finance
+    Ambil data saham berdasarkan hari perdagangan dari Yahoo Finance
     </p>
 </div>
 """, unsafe_allow_html=True)
@@ -28,7 +28,7 @@ col1, col2 = st.columns(2)
 with col1:
     timeframe = st.radio("**Interval data:**", ["30m", "60m", "1d"], index=2, horizontal=True)
 with col2:
-    days = st.number_input("**Jumlah hari perdagangan:**", min_value=1, max_value=60, value=10)
+    trading_days = st.number_input("**Jumlah hari perdagangan:**", min_value=1, max_value=60, value=10)
 
 # Informasi kolom harga
 with st.expander("ℹ️ Penjelasan Kolom Harga", expanded=False):
@@ -38,8 +38,8 @@ with st.expander("ℹ️ Penjelasan Kolom Harga", expanded=False):
     - **Adj Close**: Harga penutupan yang disesuaikan (untuk corporate actions)
     - **Open/High/Low**: Harga pembukaan/tertinggi/terendah aktual
     
-    Untuk analisis teknikal, gunakan **Close**. Untuk analisis return jangka panjang, gunakan **Adj Close**.
-    """)
+    Aplikasi ini akan mengambil data untuk **{trading_days} hari perdagangan** terakhir.
+    """.format(trading_days=trading_days))
 
 # Input metode ticker
 st.subheader("📋 Input Ticker Saham")
@@ -80,8 +80,8 @@ if st.button("🚀 Ambil Data Saham", use_container_width=True, type="primary"):
         status_text = st.empty()
         
         end_date = datetime.today()
-        # Buffer lebih besar untuk intraday
-        buffer_days = days * 5 if timeframe in ["30m", "60m"] else days * 3
+        # Hitung tanggal mulai berdasarkan hari perdagangan
+        buffer_days = trading_days * 3  # Buffer untuk hari libur
         start_date = end_date - timedelta(days=buffer_days)
         
         data_frames = []
@@ -99,7 +99,7 @@ if st.button("🚀 Ambil Data Saham", use_container_width=True, type="primary"):
                     start=start_date, 
                     end=end_date, 
                     interval=timeframe,
-                    auto_adjust=False  # Pastikan kita mendapatkan Close dan Adj Close
+                    auto_adjust=False
                 )
                 
                 if hist.empty:
@@ -117,14 +117,37 @@ if st.button("🚀 Ambil Data Saham", use_container_width=True, type="primary"):
                 
                 # Pastikan kolom Adj Close ada
                 if 'Adj Close' not in hist.columns:
-                    hist['Adj Close'] = hist['Close']  # Jika tidak ada, gunakan Close
-                
-                # Ambil data N hari terakhir
-                hist = hist.sort_values('Date', ascending=False).head(days)
-                hist.insert(0, 'Ticker', ticker)
+                    hist['Adj Close'] = hist['Close']
                 
                 # Konversi kolom tanggal
                 hist['Date'] = hist['Date'].dt.tz_localize(None)
+                
+                # Untuk data harian, ambil berdasarkan hari perdagangan
+                if timeframe == "1d":
+                    # Ambil tanggal unik dan urutkan
+                    unique_dates = hist['Date'].dt.date.unique()
+                    unique_dates_sorted = sorted(unique_dates, reverse=True)
+                    
+                    # Ambil N hari perdagangan terakhir
+                    selected_dates = unique_dates_sorted[:trading_days]
+                    
+                    # Filter data berdasarkan tanggal terpilih
+                    hist = hist[hist['Date'].dt.date.isin(selected_dates)]
+                
+                # Untuk data intraday, ambil semua data dalam hari perdagangan terakhir
+                else:
+                    # Ambil tanggal unik dan urutkan
+                    unique_dates = hist['Date'].dt.date.unique()
+                    unique_dates_sorted = sorted(unique_dates, reverse=True)
+                    
+                    # Ambil N hari perdagangan terakhir
+                    selected_dates = unique_dates_sorted[:trading_days]
+                    
+                    # Filter data berdasarkan tanggal terpilih
+                    hist = hist[hist['Date'].dt.date.isin(selected_dates)]
+                
+                # Tambahkan kolom ticker
+                hist.insert(0, 'Ticker', ticker)
                 
                 # Format tanggal
                 if timeframe == "1d":
@@ -134,7 +157,7 @@ if st.button("🚀 Ambil Data Saham", use_container_width=True, type="primary"):
                 
                 data_frames.append(hist)
                 success_count += 1
-                time.sleep(0.5)  # Menghindari rate limit
+                time.sleep(0.5)
                 
             except Exception as e:
                 st.error(f"❌ Gagal mengambil data {ticker}: {str(e)}")
@@ -144,18 +167,24 @@ if st.button("🚀 Ambil Data Saham", use_container_width=True, type="primary"):
         if data_frames:
             result_df = pd.concat(data_frames, ignore_index=True)
             
-            # Urutkan kolom dengan Adj Close setelah Close
+            # Urutkan kolom
             column_order = ['Ticker', 'Date', 'Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']
             result_df = result_df[column_order]
             
-            st.success(f"✅ Berhasil mengambil data {success_count} dari {len(tickers_list)} ticker")
+            # Urutkan berdasarkan tanggal (terbaru di atas)
+            result_df = result_df.sort_values(by='Date', ascending=False)
+            
+            st.success(f"✅ Berhasil mengambil data untuk {trading_days} hari perdagangan terakhir")
             
             if failed_tickers:
                 st.warning(f"⚠️ Gagal mengambil data untuk: {', '.join(failed_tickers)}")
             
+            # Tampilkan informasi jumlah data
+            unique_dates = result_df['Date'].nunique() if timeframe == "1d" else len(result_df['Date'].unique())
+            st.info(f"📅 Jumlah hari perdagangan yang diambil: {unique_dates} hari")
+            
             # Tampilkan data
             with st.expander("📊 Lihat Data", expanded=True):
-                # Format numerik
                 st.dataframe(result_df.style.format({
                     'Open': '{:.2f}',
                     'High': '{:.2f}',
@@ -173,19 +202,11 @@ if st.button("🚀 Ambil Data Saham", use_container_width=True, type="primary"):
             st.download_button(
                 label="💾 Download Data Excel",
                 data=output.getvalue(),
-                file_name=f"data_saham_{timeframe}_{days}hari.xlsx",
+                file_name=f"data_saham_{timeframe}_{trading_days}hari.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True,
                 type="primary"
             )
-            
-            # Tips untuk memahami perbedaan harga
-            st.info("""
-            **Perbedaan Close vs Adj Close:**
-            - **Close**: Harga aktual di pasar pada hari tersebut
-            - **Adj Close**: Harga setelah disesuaikan dengan corporate actions (stock split, dividen)
-            - Untuk saham yang tidak pernah ada corporate actions, kedua harga akan sama
-            """)
         else:
             st.error("❌ Tidak ada data yang berhasil diambil. Silakan cek koneksi atau ticker Anda")
         
