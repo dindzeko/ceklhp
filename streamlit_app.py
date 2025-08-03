@@ -2,123 +2,88 @@ import streamlit as st
 import pandas as pd
 import yfinance as yf
 from datetime import datetime, timedelta
-import numpy as np
+import io
 
 # Judul aplikasi
-st.title("📊 Aplikasi Harga Saham 15 Hari Perdagangan Terakhir")
-st.write("""
-Upload file Excel berisi daftar ticker saham, pilih tanggal, 
-lalu ambil harga closing 15 hari perdagangan terakhir hingga tanggal tersebut dari Yahoo Finance.
-""")
+st.title("📊 Aplikasi Tarik Data Saham")
 
-# Input tanggal
-selected_date = st.date_input(
-    "Pilih tanggal akhir (termasuk) untuk pengambilan data",
-    value=datetime.today().date(),
-    help="Data akan diambil dari 15 hari perdagangan terakhir hingga tanggal ini."
-)
+# Pilih Time Frame
+st.subheader("Time Frame")
+timeframe = st.radio("Pilih interval data:", ["30m", "60m", "1d"], index=2, horizontal=True)
 
-# Upload file Excel
-uploaded_file = st.file_uploader("Upload file Excel (.xlsx) yang berisi kolom 'Ticker'", type=["xlsx"])
+# Input jumlah hari perdagangan
+days = st.number_input("Masukkan jumlah hari perdagangan yang ingin diambil:", min_value=1, max_value=180, value=15)
 
-if uploaded_file:
-    try:
-        # Baca file Excel
-        df_tickers = pd.read_excel(uploaded_file)
-        
-        if 'Ticker' not in df_tickers.columns:
-            st.error("File Excel harus memiliki kolom bernama 'Ticker'")
-        else:
-            tickers = df_tickers['Ticker'].dropna().astype(str).str.strip()
-            tickers_list = tickers.tolist()
-            
-            st.write("### Ticker yang ditemukan:")
-            st.write(tickers_list)
+# Input metode ticker
+st.subheader("Ticker Saham")
+ticker_input_method = st.radio("Pilih cara input ticker:", ["Upload Excel", "Input Manual"], horizontal=True)
 
-            if st.button("🔍 Ambil Data Harga Closing"):
-                with st.spinner("Mengambil data dari Yahoo Finance..."):
-                    data = {}
-                    # Konversi ke datetime
-                    end_date = datetime.combine(selected_date, datetime.min.time()) + timedelta(days=1)  # agar inclusive
-                    start_date = end_date - timedelta(days=45)  # ambil window lebih lebar karena ada libur
+tickers_list = []
 
-                    for ticker in tickers_list:
-                        try:
-                            stock = yf.Ticker(ticker)
-                            # Ambil data harian
-                            hist = stock.history(start=start_date, end=end_date, interval="1d")
-                            
-                            if hist.empty:
-                                data[ticker] = ["No data"] * 15
-                                continue
-
-                            # Urutkan dari terbaru ke terlama, ambil 15 baris terakhir (terbaru)
-                            closing_prices = hist['Close'].sort_index(ascending=False).head(15)
-                            
-                            # Jika kurang dari 15, isi dengan NaN
-                            if len(closing_prices) < 15:
-                                closing_prices = closing_prices.reindex(
-                                    index=[None]* (15 - len(closing_prices)) + list(closing_prices.index)
-                                ).fillna("N/A")
-
-                            # Balik ke urutan H-15 (tertua) ke H-1 (terbaru)
-                            closing_list = closing_prices[::-1].tolist()
-                            data[ticker] = closing_list
-
-                        except Exception as e:
-                            data[ticker] = [f"Error: {str(e)}"] * 15
-
-                    # Buat DataFrame dengan label hari dan tanggal perdagangan
-                    result_df = pd.DataFrame(data)
-                    
-                    # Pastikan indeks adalah tipe datetime
-                    if isinstance(result_df.index[0], int):
-                        # Jika indeks adalah integer, konversi ke datetime
-                        trading_dates = pd.date_range(end=end_date, periods=len(result_df.index), freq='B')[-15:]
-                        result_df.index = trading_dates
-                    else:
-                        # Jika indeks sudah datetime, gunakan strftime
-                        trading_dates = result_df.index.to_series().apply(lambda x: x.strftime('%Y-%m-%d'))
-                    
-                    # Transpose DataFrame agar ticker jadi row dan tanggal jadi kolom
-                    result_df = result_df.T
-                    
-                    # Reset index untuk membuat ticker sebagai kolom pertama
-                    result_df.reset_index(inplace=True)
-                    result_df.rename(columns={'index': 'Saham'}, inplace=True)
-                    
-                    # Tampilkan hasil
-                    st.success("Data berhasil diambil!")
-                    st.write(f"### Harga Closing 15 Hari Perdagangan Terakhir hingga {selected_date}")
-                    st.dataframe(result_df)
-
-                    # Grafik
-                    st.write("### Grafik Harga Closing")
-                    chart_data = result_df.set_index('Saham').T
-                    numeric_data = chart_data.apply(pd.to_numeric, errors='coerce')
-                    if not numeric_data.isnull().all().all():
-                        st.line_chart(numeric_data)
-                    else:
-                        st.info("Tidak ada data numerik untuk ditampilkan dalam grafik.")
-
-                    # Download Excel
-                    output_filename = f"harga_closing_15hari_hingga_{selected_date}.xlsx"
-                    st.download_button(
-                        label="📥 Download sebagai Excel",
-                        data=result_df.to_excel(index=False),
-                        file_name=output_filename,
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
-
-    except Exception as e:
-        st.error(f"Terjadi kesalahan saat membaca file: {e}")
+if ticker_input_method == "Upload Excel":
+    uploaded_file = st.file_uploader("Upload file Excel (.xlsx) yang berisi kolom 'Ticker'", type=["xlsx"])
+    if uploaded_file:
+        try:
+            df_tickers = pd.read_excel(uploaded_file)
+            if 'Ticker' not in df_tickers.columns:
+                st.error("File Excel harus memiliki kolom bernama 'Ticker'")
+            else:
+                tickers_list = df_tickers['Ticker'].dropna().astype(str).str.strip().tolist()
+                st.write("### Ticker yang ditemukan:")
+                st.write(tickers_list)
+        except Exception as e:
+            st.error(f"Terjadi kesalahan saat membaca file: {e}")
 else:
-    st.info("Silakan upload file Excel yang berisi kolom 'Ticker'.")
-    st.markdown("""
-    **Contoh format file Excel:**
-    | Ticker   |
-    |----------|
-    | BBCA.JK  |
-    | UNVR.JK  |
-    | TLKM.JK  |
-    """)
+    manual_tickers = st.text_area("Masukkan daftar ticker (pisahkan dengan koma):", "BBCA.JK, TLKM.JK")
+    if manual_tickers:
+        tickers_list = [x.strip() for x in manual_tickers.split(",") if x.strip()]
+
+# Tombol ambil data
+if st.button("🔍 Ambil Data"):
+    if not tickers_list:
+        st.warning("Silakan input ticker saham terlebih dahulu.")
+    else:
+        with st.spinner("Mengambil data dari Yahoo Finance..."):
+            end_date = datetime.today()
+            start_date = end_date - timedelta(days=days * 2)  # ambil lebih banyak untuk jaga-jaga hari libur
+            
+            data = {}
+            for ticker in tickers_list:
+                try:
+                    stock = yf.Ticker(ticker)
+                    hist = stock.history(start=start_date, end=end_date, interval=timeframe)
+                    
+                    if hist.empty:
+                        data[ticker] = ["No data"] * days
+                        continue
+
+                    # Ambil hanya 'Close'
+                    closing_prices = hist['Close'].sort_index(ascending=False).head(days)[::-1]
+                    data[ticker] = closing_prices.tolist()
+
+                except Exception as e:
+                    data[ticker] = [f"Error: {str(e)}"] * days
+
+            # Buat DataFrame hasil
+            result_df = pd.DataFrame(data)
+
+            # Buat kolom tanggal
+            if not result_df.empty:
+                result_df.index = hist.index[-days:]
+                result_df.reset_index(inplace=True)
+                result_df.rename(columns={'index': 'Tanggal'}, inplace=True)
+
+                st.success("✅ Data berhasil diambil!")
+                st.dataframe(result_df)
+
+                # Download Excel
+                output = io.BytesIO()
+                result_df.to_excel(output, index=False)
+                st.download_button(
+                    label="📥 Download sebagai Excel",
+                    data=output,
+                    file_name=f"data_saham_{timeframe}_{days}hari.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+            else:
+                st.warning("Tidak ada data yang berhasil diambil.")
