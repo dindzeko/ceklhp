@@ -7,17 +7,17 @@ import time
 
 # Konfigurasi halaman
 st.set_page_config(
-    page_title="Aplikasi Data Saham Akurat",
+    page_title="Aplikasi Data Saham Lengkap",
     page_icon="📈",
     layout="centered"
 )
 
-# Judul aplikasi dengan penjelasan
-st.title("📊 Aplikasi Data Saham Akurat")
+# Judul aplikasi
+st.title("📊 Aplikasi Data Saham Lengkap")
 st.markdown("""
 <div style="background-color:#f0f2f6;padding:10px;border-radius:10px;margin-bottom:20px">
     <p style='text-align:center;font-size:16px;color:#333333'>
-    Ambil data historis saham langsung dari Yahoo Finance
+    Ambil data saham dengan harga aktual dan disesuaikan dari Yahoo Finance
     </p>
 </div>
 """, unsafe_allow_html=True)
@@ -30,18 +30,15 @@ with col1:
 with col2:
     days = st.number_input("**Jumlah hari perdagangan:**", min_value=1, max_value=60, value=10)
 
-# Informasi penting tentang perbedaan harga
-with st.expander("ℹ️ Mengapa harga bisa berbeda?", expanded=False):
+# Informasi kolom harga
+with st.expander("ℹ️ Penjelasan Kolom Harga", expanded=False):
     st.markdown("""
-    **Perbedaan harga biasanya karena:**
-    - **Harga Disesuaikan (Adjusted)**: 
-        - Sudah dikoreksi untuk corporate actions (stock split, dividen)
-        - Default di library yfinance
-    - **Harga Aktual (Unadjusted)**:
-        - Harga penutupan sesungguhnya di hari tersebut
-        - Sama seperti di website Yahoo Finance
-        
-    Untuk analisis harga historis aktual, selalu pilih **Harga Aktual**.
+    **Kolom Harga:**
+    - **Close**: Harga penutupan aktual (sesuai tampilan web)
+    - **Adj Close**: Harga penutupan yang disesuaikan (untuk corporate actions)
+    - **Open/High/Low**: Harga pembukaan/tertinggi/terendah aktual
+    
+    Untuk analisis teknikal, gunakan **Close**. Untuk analisis return jangka panjang, gunakan **Adj Close**.
     """)
 
 # Input metode ticker
@@ -96,13 +93,13 @@ if st.button("🚀 Ambil Data Saham", use_container_width=True, type="primary"):
                 status_text.text(f"⏳ Mengambil data {ticker} ({i+1}/{len(tickers_list)})")
                 progress_bar.progress((i+1) / len(tickers_list))
                 
-                # Ambil data dengan harga aktual (unadjusted)
+                # Ambil data dengan semua kolom termasuk Adj Close
                 stock = yf.Ticker(ticker)
                 hist = stock.history(
                     start=start_date, 
                     end=end_date, 
                     interval=timeframe,
-                    auto_adjust=False  # Pastikan harga tidak disesuaikan
+                    auto_adjust=False  # Pastikan kita mendapatkan Close dan Adj Close
                 )
                 
                 if hist.empty:
@@ -118,8 +115,9 @@ if st.button("🚀 Ambil Data Saham", use_container_width=True, type="primary"):
                 if 'Datetime' in hist.columns:
                     hist.rename(columns={'Datetime': 'Date'}, inplace=True)
                 
-                # Pastikan kita menggunakan harga penutupan aktual
-                hist['Close'] = hist['Close']  # Harga aktual
+                # Pastikan kolom Adj Close ada
+                if 'Adj Close' not in hist.columns:
+                    hist['Adj Close'] = hist['Close']  # Jika tidak ada, gunakan Close
                 
                 # Ambil data N hari terakhir
                 hist = hist.sort_values('Date', ascending=False).head(days)
@@ -146,9 +144,9 @@ if st.button("🚀 Ambil Data Saham", use_container_width=True, type="primary"):
         if data_frames:
             result_df = pd.concat(data_frames, ignore_index=True)
             
-            # Pilih kolom yang relevan
-            columns_to_keep = ['Ticker', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume']
-            result_df = result_df[columns_to_keep]
+            # Urutkan kolom dengan Adj Close setelah Close
+            column_order = ['Ticker', 'Date', 'Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']
+            result_df = result_df[column_order]
             
             st.success(f"✅ Berhasil mengambil data {success_count} dari {len(tickers_list)} ticker")
             
@@ -163,6 +161,7 @@ if st.button("🚀 Ambil Data Saham", use_container_width=True, type="primary"):
                     'High': '{:.2f}',
                     'Low': '{:.2f}',
                     'Close': '{:.2f}',
+                    'Adj Close': '{:.2f}',
                     'Volume': '{:,.0f}'
                 }), use_container_width=True, height=400)
             
@@ -180,12 +179,12 @@ if st.button("🚀 Ambil Data Saham", use_container_width=True, type="primary"):
                 type="primary"
             )
             
-            # Tips untuk memastikan keakuratan
+            # Tips untuk memahami perbedaan harga
             st.info("""
-            **Tips untuk memastikan keakuratan data:**
-            1. Bandingkan dengan data di [Yahoo Finance](https://finance.yahoo.com/)
-            2. Untuk saham Indonesia, pastikan ticker diakhiri dengan .JK (contoh: PTBA.JK)
-            3. Jika ada perbedaan signifikan, cek tanggal corporate actions
+            **Perbedaan Close vs Adj Close:**
+            - **Close**: Harga aktual di pasar pada hari tersebut
+            - **Adj Close**: Harga setelah disesuaikan dengan corporate actions (stock split, dividen)
+            - Untuk saham yang tidak pernah ada corporate actions, kedua harga akan sama
             """)
         else:
             st.error("❌ Tidak ada data yang berhasil diambil. Silakan cek koneksi atau ticker Anda")
